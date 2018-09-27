@@ -17,7 +17,7 @@ func request_handler_main() {
   requestEndpoint := http.NewServeMux()
 
   /// Redirect requests to this endpoint to the associated function
-  requestEndpoint.HandleFunc("/getlogs",getlogs)
+  requestEndpoint.HandleFunc("/getlogs",getLogs)
 
   /// Port: 3000 to be exposed to handle all incoming requests
   http.ListenAndServe(":3000", requestEndpoint)

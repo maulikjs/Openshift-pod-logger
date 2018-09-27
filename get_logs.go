@@ -11,8 +11,13 @@ package main
 import "net/http"
 
 
-func getlogs(w http.ResponseWriter, r *http.Request) {
+func getLogs(w http.ResponseWriter, r *http.Request) {
   w.Header().Set("Access-Control-Allow-Origin", "*")
   name := r.URL.RawQuery
   w.Write([]byte(name))
 }
+
+// 
+// func fetchLogs(namespace string, pod string, container string){
+//   fmt.pti
+// }
