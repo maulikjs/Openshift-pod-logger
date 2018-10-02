@@ -1,7 +1,6 @@
 /*
 Created by: Maulik Shah (mshah@redhat.com)
 Date Created: 09/27/2018
-Date last updated: 09/27/2018
 
 File to define how various API endpoints are handled
 */
