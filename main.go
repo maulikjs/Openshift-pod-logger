@@ -9,7 +9,7 @@ Main entrypoint file for the service
 package main
 
 import (
-	// "fmt"
+	"fmt"
 	// "log"
 	"flag"
 	// "github.com/aws/aws-sdk-go/aws"
@@ -48,9 +48,13 @@ func main() {
 
 	valsFromCSV := readCSV(*fileptr)
 	for _, element := range valsFromCSV {
+		fmt.Println(element)
 		go scrapeLogs(element, s3session)
 	}
 
 	//Start the service and service REST endpoints
 	request_handler_main()
 }
+
+
+//dh-prod-elastalert,elastalertcore-1-lfdpm,elastalertcore

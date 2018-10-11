@@ -9,11 +9,11 @@ package main
 
 import (
   "net/http"
-  // "fmt"
+  "fmt"
   // "net/url"
   "crypto/tls"
   "bufio"
-  // "io/ioutil"
+  "io/ioutil"
   "time"
   "strings"
   // "github.com/aws/aws-sdk-go/service/s3"
@@ -24,6 +24,7 @@ import (
 func getLogs(w http.ResponseWriter, r *http.Request) {
   w.Header().Set("Access-Control-Allow-Origin", "*")
   name := r.URL.RawQuery
+  // TODO: 
   w.Write([]byte(name))
 }
 
@@ -33,22 +34,19 @@ func scrapeLogs(containerPtr []string, s3session *session.Session ) {
   lastTimeStamp := time.Now()
   for {
     lastTimeStamp = fetchLogs(containerPtr, url, lastTimeStamp)
-    time.Sleep(10 * time.Second)
+    time.Sleep(120 * time.Second)
   }
 }
 
 
 func fetchLogs(containerPtr []string, url string, sinceTime time.Time) time.Time{
-
-  // fmt.Println(containerPtr)
-  // fmt.Println("Enter",containerPtr, sinceTime)
-
+  errorFound := false
   RFC3339Nano := "2006-01-02T15:04:05.999999999Z"
 
   http.DefaultTransport.(*http.Transport).TLSClientConfig = &tls.Config{InsecureSkipVerify: true}
-
-  requesturl = url + "&sinceTime="+sinceTime.Format(RFC3339Nano)
-
+  utc,_ := time.LoadLocation("Etc/UTC")
+  requesturl := url + "&sinceTime="+sinceTime.In(utc).Format(RFC3339Nano)
+  fmt.Println(requesturl)
   req, _ := http.NewRequest("GET", requesturl , nil)
   req.Header.Add("Accept","application/json")
   req.Header.Add("Authorization", "Bearer "+*token)
@@ -56,12 +54,11 @@ func fetchLogs(containerPtr []string, url string, sinceTime time.Time) time.Time
   defer resp.Body.Close()
 
   if resp.StatusCode != http.StatusOK {
-    return sinceTime
+    return sinceTime.In(utc)
   }
 
   reader := bufio.NewReader(resp.Body)
-
-  lastTimeStamp,_ := time.Parse("2006-01-02T15:04:05.999999999Z","2006-01-02T15:04:05.999999999Z") // Redundant old date in the past
+  lastTimeStamp := sinceTime.In(utc)
 
   for {
     line, err := reader.ReadString('\n')
@@ -70,31 +67,28 @@ func fetchLogs(containerPtr []string, url string, sinceTime time.Time) time.Time
       lastTimeStamp,_ = time.Parse(RFC3339Nano, line[0:timeStampPosition+1])
     }
 
+
     if CaseInsensitiveContains(line, "error") || CaseInsensitiveContains(line, "warn") {
-      go writeLogsToCeph(url)
-      }
-
-
-    if err != nil {
-      // fmt.Println(line)
-      // fmt.Println(lastTimeStamp)
-      // fmt.Println(time.Now())
-      // fmt.Println(err)
-      // fmt.Println(containerPtr)
-      return lastTimeStamp.Add(time.Nanosecond)
+        errorFound = true
     }
 
+    if err != nil {
+      if errorFound {
+        go writeLogsToCeph(url,lastTimeStamp)
+      }
+      return lastTimeStamp.Add(time.Nanosecond)
+    }
   }
+
   return lastTimeStamp
 }
 
-func writeLogsToCeph(url string) {
+func writeLogsToCeph(url string, sinceTime time.Time) {
 
-  RFC3339Nano := "2006-01-02T15:04:05.999999999Z"
-
+  utc,_ := time.LoadLocation("Etc/UTC")
   http.DefaultTransport.(*http.Transport).TLSClientConfig = &tls.Config{InsecureSkipVerify: true}
-
-  requesturl = url + "&sinceTime="+sinceTime.Format(RFC3339Nano)
+  RFC3339Nano := "2006-01-02T15:04:05.999999999Z"
+  requesturl := url + "&sinceTime="+sinceTime.Add(-5*time.Minute).In(utc).Format(RFC3339Nano)
 
   req, _ := http.NewRequest("GET", requesturl , nil)
   req.Header.Add("Accept","application/json")
@@ -102,8 +96,13 @@ func writeLogsToCeph(url string) {
   resp, _ := http.DefaultClient.Do(req)
   defer resp.Body.Close()
 
+  body,_ := ioutil.ReadAll(resp.Body)
+  fmt.Println(string(body))
+
+  _ = body
   if resp.StatusCode != http.StatusOK {
     fmt.Println("Error getting data to write to ceph")
+
   }
 
 }
