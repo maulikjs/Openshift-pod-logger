@@ -16,20 +16,21 @@ import (
   "io/ioutil"
   "time"
   "strings"
+  // "reflect"
   // "github.com/aws/aws-sdk-go/service/s3"
   // "github.com/aws/aws-sdk-go/aws/endpoints"
-  "github.com/aws/aws-sdk-go/aws/session"
+  // "github.com/aws/aws-sdk-go/aws/session"
   )
 
 func getLogs(w http.ResponseWriter, r *http.Request) {
   w.Header().Set("Access-Control-Allow-Origin", "*")
   name := r.URL.RawQuery
-  // TODO: 
+  // TODO: Implement function where you can see logs
   w.Write([]byte(name))
 }
 
 
-func scrapeLogs(containerPtr []string, s3session *session.Session ) {
+func scrapeLogs(containerPtr []string) {
   url := "https://"+ *cluster + ":" + *clusterPort + "/api/v1/namespaces/"+containerPtr[0]+"/pods/" +containerPtr[1]+ "/log?timestamps=true&container="+containerPtr[2]
   lastTimeStamp := time.Now()
   for {
@@ -50,7 +51,13 @@ func fetchLogs(containerPtr []string, url string, sinceTime time.Time) time.Time
   req, _ := http.NewRequest("GET", requesturl , nil)
   req.Header.Add("Accept","application/json")
   req.Header.Add("Authorization", "Bearer "+*token)
-  resp, _ := http.DefaultClient.Do(req)
+  resp, err := http.DefaultClient.Do(req)
+
+  if err != nil {
+    fmt.Println("Error getting logs:", err)
+    return time.Now().In(utc)
+  }
+
   defer resp.Body.Close()
 
   if resp.StatusCode != http.StatusOK {
@@ -72,9 +79,9 @@ func fetchLogs(containerPtr []string, url string, sinceTime time.Time) time.Time
         errorFound = true
     }
 
-    if err != nil {
+    if err != nil { // Case only executed when the body reader reaches EOF
       if errorFound {
-        go writeLogsToCeph(url,lastTimeStamp)
+        go writeLogsToCeph(containerPtr,url,lastTimeStamp)
       }
       return lastTimeStamp.Add(time.Nanosecond)
     }
@@ -83,7 +90,7 @@ func fetchLogs(containerPtr []string, url string, sinceTime time.Time) time.Time
   return lastTimeStamp
 }
 
-func writeLogsToCeph(url string, sinceTime time.Time) {
+func writeLogsToCeph(containerPtr []string, url string, sinceTime time.Time) {
 
   utc,_ := time.LoadLocation("Etc/UTC")
   http.DefaultTransport.(*http.Transport).TLSClientConfig = &tls.Config{InsecureSkipVerify: true}
@@ -93,13 +100,21 @@ func writeLogsToCeph(url string, sinceTime time.Time) {
   req, _ := http.NewRequest("GET", requesturl , nil)
   req.Header.Add("Accept","application/json")
   req.Header.Add("Authorization", "Bearer "+*token)
-  resp, _ := http.DefaultClient.Do(req)
+  resp, err := http.DefaultClient.Do(req)
+
+  if err != nil {
+    fmt.Println("Error getting logs:", err)
+    return
+  }
+
   defer resp.Body.Close()
 
   body,_ := ioutil.ReadAll(resp.Body)
-  fmt.Println(string(body))
 
-  _ = body
+  if body!=nil {
+    go pushToCeph(containerPtr, body, sinceTime)
+  }
+
   if resp.StatusCode != http.StatusOK {
     fmt.Println("Error getting data to write to ceph")
 

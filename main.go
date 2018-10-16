@@ -14,7 +14,7 @@ import (
 	"flag"
 	// "github.com/aws/aws-sdk-go/aws"
 	// "github.com/aws/aws-sdk-go/aws/endpoints"
-	// "github.com/aws/aws-sdk-go/aws/session"
+	"github.com/aws/aws-sdk-go/aws/session"
 	// "github.com/aws/aws-sdk-go/service/s3"
 	)
 
@@ -26,6 +26,8 @@ var clusterPort *string
 var valsFromCSV [][]string
 var s3instance *string
 var bucketName *string
+var S3session *session.Session
+
 
 func main() {
 
@@ -42,14 +44,14 @@ func main() {
 	// Parse the command line arguements
 	flag.Parse()
 
-	s3session := createSession(*s3instance)
+	S3session = createSession(*s3instance)
 
 
 
 	valsFromCSV := readCSV(*fileptr)
 	for _, element := range valsFromCSV {
 		fmt.Println(element)
-		go scrapeLogs(element, s3session)
+		go scrapeLogs(element)
 	}
 
 	//Start the service and service REST endpoints
